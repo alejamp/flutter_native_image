@@ -26,6 +26,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.HashMap;
 
+import 	android.graphics.Matrix;
+
 /**
  * FlutterNativeImagePlugin
  */
@@ -80,6 +82,7 @@ public class FlutterNativeImagePlugin implements MethodCallHandler {
         OutputStream outputStream = new FileOutputStream(outputFileName);
         bos.writeTo(outputStream);
 
+      // Log.e("asdasd", 'as');
         copyExif(fileName, outputFileName);
 
         result.success(outputFileName);
@@ -121,6 +124,11 @@ public class FlutterNativeImagePlugin implements MethodCallHandler {
       result.success(properties);
       return;
     }
+
+
+    //------------------------------------------------------------
+    // CROP IMAGE!!
+    //------------------------------------------------------------
     if(call.method.equals("cropImage")) {
     	String fileName = call.argument("file");
     	int originX = call.argument("originX");
@@ -138,14 +146,50 @@ public class FlutterNativeImagePlugin implements MethodCallHandler {
     	Bitmap bmp = BitmapFactory.decodeFile(fileName);
       ByteArrayOutputStream bos = new ByteArrayOutputStream();
 
+      int rotate = 0;
+      try {
+
+          ExifInterface exif = new ExifInterface(
+                  file.getAbsolutePath());
+          int orientation = exif.getAttributeInt(
+                  ExifInterface.TAG_ORIENTATION,
+                  ExifInterface.ORIENTATION_NORMAL);
+
+          switch (orientation) {
+          case ExifInterface.ORIENTATION_ROTATE_270:
+              rotate = 270;
+              break;
+          case ExifInterface.ORIENTATION_ROTATE_180:
+              rotate = 180;
+              break;
+          case ExifInterface.ORIENTATION_ROTATE_90:
+              rotate = 90;
+              break;
+          }
+          // Log.v(Common.TAG, "Exif orientation: " + orientation);
+      } catch (Exception e) {
+          e.printStackTrace();
+      }      
+
     	try {
-			 bmp = Bitmap.createBitmap(bmp, originX, originY, width, height);
+        Log.d("ALE >>>>>>>>>>>>>>>>>", "Rotation detected:" + rotate);
+        Matrix matrix = new Matrix();
+        matrix.postRotate(rotate);
+        // Bitmap cropped = Bitmap.createBitmap(scaled, x, y, width, height, matrix, true);
+        bmp = Bitmap.createBitmap(bmp, originX, originY, width, height, matrix, true);
+        Log.d("ALE >>>>>>>>>>>>>>>>>", "Rotation done!");
+
       } catch(IllegalArgumentException e) {
         e.printStackTrace();
         result.error("bounds are outside of the dimensions of the source image", fileName, null);
       }
 
       bmp.compress(Bitmap.CompressFormat.JPEG, 100, bos);
+
+
+
+
+
 
     	try {
         String outputFileName = File.createTempFile(
@@ -157,6 +201,7 @@ public class FlutterNativeImagePlugin implements MethodCallHandler {
   			OutputStream outputStream = new FileOutputStream(outputFileName);
   			bos.writeTo(outputStream);
 
+        Log.d("ALE >>>>>>>>>>>>>>>>>", "copy of exif data");
         copyExif(fileName, outputFileName);
 
         result.success(outputFileName);
@@ -170,12 +215,20 @@ public class FlutterNativeImagePlugin implements MethodCallHandler {
 
   		return;
     }
+    //------------------------------------------------------------------------
+
+
+
+
+
     if (call.method.equals("getPlatformVersion")) {
       result.success("Android " + android.os.Build.VERSION.RELEASE);
     } else {
       result.notImplemented();
     }
   }
+
+
 
   private void copyExif(String filePathOri, String filePathDest) {
     try {
@@ -202,10 +255,15 @@ public class FlutterNativeImagePlugin implements MethodCallHandler {
               "GPSLongitudeRef",
               "Make",
               "Model",
-              "Orientation");
+              "Orientation"
+          );
+
       for (String attribute : attributes) {
         setIfNotNull(oldExif, newExif, attribute);
       }
+
+      Log.d("ALE >>>>>>>>>>>>>>>>>", "Overwrite tag oriention to 1 - Normal");
+      newExif.setAttribute(ExifInterface.TAG_ORIENTATION, "1");
 
       newExif.saveAttributes();
 
